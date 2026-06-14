@@ -55,10 +55,12 @@ def parse_file(path: str, state: dict) -> tuple[list[Message], str]:
 
     messages: list[Message] = []
 
-    for div in soup.find_all('div', id=re.compile(r'^message-\d+$')):
+    # AyuGram uses "message-NNN" (with hyphen) in older exports and
+    # "messageNNN" (no hyphen) in newer ones — accept both.
+    for div in soup.find_all('div', id=re.compile(r'^message-?\d+$')):
         classes = div.get('class', [])
         try:
-            msg_id = int(div['id'].replace('message-', ''))
+            msg_id = int(re.sub(r'^message-?', '', div['id']))
         except (KeyError, ValueError):
             continue
 
