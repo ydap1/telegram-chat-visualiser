@@ -1,3 +1,6 @@
-matplotlib==3.7.1
-nltk==3.8.1
-wordcloud==1.8.2.2
+matplotlib>=3.7
+nltk>=3.8
+wordcloud>=1.8
+networkx>=3.0
+vaderSentiment>=3.3
+tabulate>=0.9
