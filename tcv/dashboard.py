@@ -50,7 +50,7 @@ def _timeline_data(msgs: list[Message]) -> list[tuple[str, int]]:
 
 def _per_person(msgs: list[Message]) -> list[dict]:
     nlp.ensure_nltk_data()
-    stop = nlp.stopword_set()
+    stop = nlp.extended_stopword_set()
     senders = sorted({m.sender for m in msgs})
     rows = []
     for sender in senders:
@@ -89,9 +89,7 @@ def _per_person(msgs: list[Message]) -> list[dict]:
     return rows
 
 
-def _word_freq(msgs: list[Message]) -> list[tuple[str, int]]:
-    nlp.ensure_nltk_data()
-    stop = nlp.stopword_set()
+def _word_freq(msgs: list[Message], stop: set[str]) -> list[tuple[str, int]]:
     combined = ' '.join(nlp.clean(m.text) for m in msgs if m.text)
     freq = Counter(nlp.tokenize_and_filter(combined, stop))
     return freq.most_common(500)
@@ -277,6 +275,7 @@ section h2{font-size:1rem;font-weight:700;text-transform:uppercase;letter-spacin
 .words-controls input[type=number]{width:64px;background:#1a1a2e;border:1px solid #2a2a4a;
                                     color:#e0e0e0;border-radius:6px;padding:4px 8px;font-size:13px}
 #words-n-val{font-weight:700;color:#4FC3F7;min-width:24px}
+.mode-wrap{margin-left:auto;display:flex;gap:4px}
 .bar-row{display:flex;align-items:center;gap:8px;margin-bottom:6px}
 .bar-lbl{width:130px;text-align:right;font-size:12px;color:#c0c0d8;overflow:hidden;
          text-overflow:ellipsis;white-space:nowrap;flex-shrink:0}
@@ -348,6 +347,8 @@ const I18N = {
     'lbl.replies':    'replies',
     'ctrl.showing':   'Top',
     'ctrl.words':     'words',
+    'ctrl.mode_smart':'Meaningful',
+    'ctrl.mode_all':  'All words',
     'th.sender':      'Sender',
     'th.messages':    'Msgs',
     'th.words':       'Words',
@@ -389,6 +390,8 @@ const I18N = {
     'lbl.replies':    'ответов',
     'ctrl.showing':   'Топ',
     'ctrl.words':     'слов',
+    'ctrl.mode_smart':'Смысловые',
+    'ctrl.mode_all':  'Все слова',
     'th.sender':      'Участник',
     'th.messages':    'Сообщ.',
     'th.words':       'Слов',
@@ -404,6 +407,18 @@ const I18N = {
 };
 
 let currentLang = 'ru';
+let wordMode = 'smart';
+
+function setWordMode(m) {
+  wordMode = m;
+  document.getElementById('btn-smart').classList.toggle('active', m === 'smart');
+  document.getElementById('btn-all').classList.toggle('active', m === 'all');
+  const wcs = document.getElementById('wc-smart');
+  const wca = document.getElementById('wc-all');
+  if (wcs) wcs.style.display = m === 'smart' ? '' : 'none';
+  if (wca) wca.style.display = m === 'all' ? '' : 'none';
+  renderWords(+document.getElementById('words-slider').value);
+}
 
 function setLang(l) {
   currentLang = l;
@@ -440,6 +455,7 @@ function renderHeatmap() {
 }
 
 function renderWords(n) {
+  const WORD_FREQ = wordMode === 'smart' ? WORD_FREQ_SMART : WORD_FREQ_ALL;
   n = Math.max(1, Math.min(n, WORD_FREQ.length));
   document.getElementById('words-n-val').textContent = n;
   document.getElementById('words-slider').value = n;
@@ -554,12 +570,14 @@ def generate(messages: list[Message], chat_name: str, num_words: int = 150) -> s
                      if m.media_type == 'voice_message') // 60
 
     print('  Computing word frequencies ...')
-    word_freq = _word_freq(text_msgs)
+    stop_basic = nlp.stopword_set()
+    stop_smart = nlp.extended_stopword_set()
+    word_freq_all   = _word_freq(text_msgs, stop_basic)
+    word_freq_smart = _word_freq(text_msgs, stop_smart)
 
-    nlp_stop = nlp.stopword_set()
     all_words = []
     for m in text_msgs:
-        all_words.extend(nlp.tokenize_and_filter(nlp.clean(m.text), nlp_stop))
+        all_words.extend(nlp.tokenize_and_filter(nlp.clean(m.text), stop_basic))
     vocab_size = len(set(all_words))
 
     print('  Computing per-person stats ...')
@@ -571,21 +589,26 @@ def generate(messages: list[Message], chat_name: str, num_words: int = 150) -> s
     link_freq   = _link_freq(text_msgs)
 
     print('  Generating charts ...')
-    b64_wc       = _wordcloud_b64(word_freq, num_words)
+    b64_wc_smart = _wordcloud_b64(word_freq_smart, num_words)
+    b64_wc_all   = _wordcloud_b64(word_freq_all, num_words)
     b64_timeline = _timeline_b64(timeline)
     b64_sent     = _sentiment_b64(text_msgs)
 
     # ── inject data as JS ──
     data_js = (
         f'const HM_DATA = {json.dumps(hm_data)};\n'
-        f'const WORD_FREQ = {json.dumps(word_freq)};\n'
+        f'const WORD_FREQ_SMART = {json.dumps(word_freq_smart)};\n'
+        f'const WORD_FREQ_ALL = {json.dumps(word_freq_all)};\n'
     )
 
     # ── sections ──
-    wc_html = (
-        f'<img class="chart-img" src="data:image/png;base64,{b64_wc}" alt="word cloud">'
-        if b64_wc else '<p style="color:#8888aa">Word cloud could not be generated.</p>'
-    )
+    def _wc_img(img_id: str, b64: Optional[str], hidden: bool = False) -> str:
+        if not b64:
+            return '' if hidden else '<p style="color:#8888aa">Word cloud could not be generated.</p>'
+        disp = ' style="display:none"' if hidden else ''
+        return f'<img id="{img_id}" class="chart-img" src="data:image/png;base64,{b64}" alt="word cloud"{disp}>'
+
+    wc_html = _wc_img('wc-smart', b64_wc_smart) + _wc_img('wc-all', b64_wc_all, hidden=True)
     timeline_html = (
         f'<img class="chart-img" src="data:image/png;base64,{b64_timeline}" alt="timeline">'
         if b64_timeline else ''
@@ -607,7 +630,7 @@ def generate(messages: list[Message], chat_name: str, num_words: int = 150) -> s
   <tbody>{_stats_rows(person_stats)}</tbody>
 </table></div>'''
 
-    max_slider = min(len(word_freq), 200)
+    max_slider = min(max(len(word_freq_smart), len(word_freq_all)), 200)
 
     return f"""<!DOCTYPE html>
 <html lang="ru">
@@ -669,6 +692,10 @@ def generate(messages: list[Message], chat_name: str, num_words: int = 150) -> s
         <input type="range"  id="words-slider" min="5" max="{max_slider}" value="20">
         <span id="words-n-val" style="color:#4FC3F7;font-weight:700">20</span>
         <span data-key="ctrl.words"></span>
+        <div class="mode-wrap">
+          <button class="lang-btn active" id="btn-smart" onclick="setWordMode('smart')" data-key="ctrl.mode_smart"></button>
+          <button class="lang-btn" id="btn-all" onclick="setWordMode('all')" data-key="ctrl.mode_all"></button>
+        </div>
       </div>
       <div id="words-chart"></div>
     </div>

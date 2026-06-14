@@ -37,5 +37,40 @@ def stopword_set(langs: list[str] | None = None) -> set[str]:
     return result
 
 
+# Russian filler / slang words not covered by NLTK's stopword list
+_RU_EXTRA: frozenset[str] = frozenset({
+    # phonetic / slang variants of common words
+    'ваще', 'типа', 'типо', 'щас', 'ща', 'дак', 'хз', 'чет', 'чё', 'чо', 'че',
+    'норм', 'окей', 'лан', 'короче', 'короч', 'оч', 'мб', 'прям',
+    # filler adverbs / connectors missed by NLTK
+    'вроде', 'пока', 'блин', 'ага', 'угу', 'вот', 'тут', 'там',
+    'наверное', 'наверно', 'конечно', 'именно', 'просто', 'вообще',
+    'совсем', 'тоже', 'уже', 'ещё', 'еще', 'даже', 'уж', 'потом',
+    'сейчас', 'раньше', 'раз', 'итак', 'значит', 'кстати', 'вообщем',
+    'хотя', 'хотябы', 'сразу', 'очень', 'также', 'ток',
+    'всё', 'все', 'всем', 'всего', 'всей', 'всех', 'всеми',
+    'такие', 'таких', 'таким', 'такими',
+    # demonstratives — NLTK misses most forms
+    'это', 'эта', 'этот', 'этого', 'этому', 'этим', 'этой', 'этих', 'эту',
+    'та', 'те', 'тех', 'тем', 'теми', 'той', 'такое',
+    # pronoun cases missed by NLTK
+    'тебя', 'тебе', 'тобой',
+    # relative pronouns (declined)
+    'который', 'которые', 'которых', 'которому', 'которого', 'которой', 'которым', 'которыми',
+    # laughter / reactions
+    'лол', 'лмао', 'кек', 'хах', 'хаха', 'хахах', 'хахаха', 'хахахаха',
+    'ахах', 'ахахах', 'ахахаха', 'хд',
+    # expletives / mat used as fillers (not content words)
+    'бля', 'блять', 'блт', 'ебать', 'ебат', 'пиздец', 'пздц', 'нахуй',
+    'хуй', 'хуя', 'хуе', 'хуев', 'сука', 'суки',
+    'похуй', 'похую', 'нихуя', 'хуйня', 'хуйни',
+})
+
+
+def extended_stopword_set(langs: list[str] | None = None) -> set[str]:
+    """NLTK stopwords plus Russian chat fillers, slang, and expletive fillers."""
+    return stopword_set(langs) | _RU_EXTRA
+
+
 def tokenize_and_filter(text: str, stop: set[str]) -> list[str]:
     return [w.lower() for w in nltk.word_tokenize(text) if w.isalpha() and w.lower() not in stop]
