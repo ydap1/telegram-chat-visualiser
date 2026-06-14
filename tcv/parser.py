@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import sys
 from dataclasses import dataclass
 from datetime import datetime
@@ -35,7 +36,7 @@ def _extract_text(field) -> str:
     return ''
 
 
-def load(path: str) -> tuple[list[Message], str]:
+def _load_json(path: str) -> tuple[list[Message], str]:
     try:
         with open(path, encoding='utf-8') as f:
             data = json.load(f)
@@ -67,3 +68,20 @@ def load(path: str) -> tuple[list[Message], str]:
         ))
 
     return messages, chat_name
+
+
+def load(path: str) -> tuple[list[Message], str]:
+    """Load a Telegram export. Accepts:
+    - a directory containing messages*.html files (HTML export)
+    - a single .html file
+    - a .json file (JSON export)
+    """
+    if os.path.isdir(path):
+        from tcv.html_parser import load_directory
+        return load_directory(path)
+
+    if path.lower().endswith('.html'):
+        from tcv.html_parser import parse_file
+        return parse_file(path, {})
+
+    return _load_json(path)
