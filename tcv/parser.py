@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import os
 import sys
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Optional
 
@@ -20,6 +20,7 @@ class Message:
     media_type: Optional[str]
     duration_seconds: Optional[int]
     forwarded_from: Optional[str]
+    reactions: list = field(default_factory=list)  # [{"emoji": "👍", "count": 3}]
 
 
 def _extract_text(field) -> str:
@@ -27,12 +28,20 @@ def _extract_text(field) -> str:
         return field
     if isinstance(field, list):
         parts = []
+        hrefs = []
         for part in field:
             if isinstance(part, str):
                 parts.append(part)
             elif isinstance(part, dict):
                 parts.append(part.get('text', ''))
-        return ''.join(parts)
+                # Collect hrefs so _link_freq can find them;
+                # nlp.clean() strips URLs before word analysis
+                if part.get('href'):
+                    hrefs.append(part['href'])
+        text = ''.join(parts)
+        if hrefs:
+            text += ' ' + ' '.join(hrefs)
+        return text
     return ''
 
 
@@ -54,6 +63,13 @@ def _load_json(path: str) -> tuple[list[Message], str]:
         except (ValueError, TypeError):
             continue
 
+        raw_rx = raw.get('reactions') or []
+        reactions = [
+            {'emoji': r['emoji'], 'count': r.get('count', 1)}
+            for r in raw_rx
+            if r.get('type') == 'emoji' and r.get('emoji')
+        ]
+
         messages.append(Message(
             id=raw.get('id', 0),
             type=raw.get('type', ''),
@@ -65,6 +81,7 @@ def _load_json(path: str) -> tuple[list[Message], str]:
             media_type=raw.get('media_type'),
             duration_seconds=raw.get('duration_seconds'),
             forwarded_from=raw.get('forwarded_from'),
+            reactions=reactions,
         ))
 
     return messages, chat_name

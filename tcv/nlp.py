@@ -60,6 +60,8 @@ _RU_EXTRA: frozenset[str] = frozenset({
     # laughter / reactions
     'лол', 'лмао', 'кек', 'хах', 'хаха', 'хахах', 'хахаха', 'хахахаха',
     'ахах', 'ахахах', 'ахахаха', 'хд',
+    # channel link CTA text appearing in forwarded posts (not user-generated content)
+    'подписаться', 'подпишитесь', 'подписывайтесь',
     # expletives / mat used as fillers (not content words)
     'бля', 'блять', 'блт', 'ебать', 'ебат', 'пиздец', 'пздц', 'нахуй',
     'хуй', 'хуя', 'хуе', 'хуев', 'сука', 'суки',

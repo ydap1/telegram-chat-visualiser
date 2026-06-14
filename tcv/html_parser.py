@@ -153,6 +153,19 @@ def parse_file(path: str, state: dict) -> tuple[list[Message], str]:
                 if dm:
                     duration_seconds = int(dm.group(1)) * 60 + int(dm.group(2))
 
+        # Reactions: <span class="reactions"><span class="reaction"><span class="emoji">👍</span>
+        reactions = []
+        rx_wrap = body.find('span', class_='reactions')
+        if rx_wrap:
+            for rx in rx_wrap.find_all('span', class_='reaction'):
+                emoji_span = rx.find('span', class_='emoji')
+                if emoji_span:
+                    userpics = rx.find_all('div', class_='userpic')
+                    reactions.append({
+                        'emoji': emoji_span.get_text(strip=True),
+                        'count': len(userpics) if userpics else 1,
+                    })
+
         messages.append(Message(
             id=msg_id,
             type='message',
@@ -164,6 +177,7 @@ def parse_file(path: str, state: dict) -> tuple[list[Message], str]:
             media_type=media_type,
             duration_seconds=duration_seconds,
             forwarded_from=forwarded_from,
+            reactions=reactions,
         ))
 
     return messages, state.get('chat_name', 'Unknown Chat')

@@ -102,6 +102,14 @@ def _emoji_freq(msgs: list[Message]) -> list[tuple[str, int]]:
     return counts.most_common(50)
 
 
+def _reaction_freq(msgs: list[Message]) -> list[tuple[str, int]]:
+    counts: Counter[str] = Counter()
+    for m in msgs:
+        for r in m.reactions:
+            counts[r['emoji']] += r.get('count', 1)
+    return counts.most_common(30)
+
+
 def _link_freq(msgs: list[Message]) -> list[tuple[str, int]]:
     from urllib.parse import urlparse
     counts: Counter[str] = Counter()
@@ -256,6 +264,9 @@ section h2{font-size:1rem;font-weight:700;text-transform:uppercase;letter-spacin
 /* ── side-by-side ── */
 .two-col{display:grid;grid-template-columns:1fr 1fr;gap:24px}
 @media(max-width:800px){.two-col{grid-template-columns:1fr}}
+.three-col{display:grid;grid-template-columns:1fr 1fr 1fr;gap:24px}
+@media(max-width:1000px){.three-col{grid-template-columns:1fr 1fr}}
+@media(max-width:600px){.three-col{grid-template-columns:1fr}}
 
 /* ── heatmap ── */
 .heatmap-wrap{overflow-x:auto}
@@ -335,6 +346,7 @@ const I18N = {
     'sec.topwords':   'Most common words',
     'sec.stats':      'Statistics per person',
     'sec.emoji':      'Emoji usage',
+    'sec.reactions':  'Message reactions',
     'sec.links':      'Most shared domains',
     'sec.sentiment':  'Sentiment over time',
     'lbl.messages':   'messages',
@@ -378,6 +390,7 @@ const I18N = {
     'sec.topwords':   'Самые частые слова',
     'sec.stats':      'Статистика по участникам',
     'sec.emoji':      'Использование emoji',
+    'sec.reactions':  'Реакции на сообщения',
     'sec.links':      'Топ сайтов',
     'sec.sentiment':  'Настроение чата',
     'lbl.messages':   'сообщений',
@@ -546,7 +559,8 @@ def _links_html(link_freq: list[tuple[str, int]]) -> str:
 
 # ── main generate ─────────────────────────────────────────────────────────────
 
-def generate(messages: list[Message], chat_name: str, num_words: int = 150) -> str:
+def generate(messages: list[Message], chat_name: str, num_words: int = 150,
+             pdf_path: Optional[str] = None) -> str:
     import matplotlib
     matplotlib.use('Agg')
 
@@ -583,10 +597,11 @@ def generate(messages: list[Message], chat_name: str, num_words: int = 150) -> s
     print('  Computing per-person stats ...')
     person_stats = _per_person(text_msgs)
 
-    hm_data     = _heatmap_data(text_msgs)
-    timeline    = _timeline_data(text_msgs)
-    emoji_freq  = _emoji_freq(text_msgs)
-    link_freq   = _link_freq(text_msgs)
+    hm_data       = _heatmap_data(text_msgs)
+    timeline      = _timeline_data(text_msgs)
+    emoji_freq    = _emoji_freq(text_msgs)
+    reaction_freq = _reaction_freq(text_msgs)
+    link_freq     = _link_freq(text_msgs)
 
     print('  Generating charts ...')
     b64_wc_smart = _wordcloud_b64(word_freq_smart, num_words)
@@ -631,6 +646,38 @@ def generate(messages: list[Message], chat_name: str, num_words: int = 150) -> s
 </table></div>'''
 
     max_slider = min(max(len(word_freq_smart), len(word_freq_all)), 200)
+
+    # ── optional PDF ──
+    if pdf_path:
+        print('  Generating PDF ...')
+        from tcv.pdf_export import generate_pdf
+        overview_cards = [
+            ('Messages',     f'{len(text_msgs):,}'),
+            ('Participants', str(n_senders)),
+            ('Days active',  f'{span_days:,}'),
+            ('Media files',  f'{n_media:,}'),
+            ('Voice min',    str(voice_min)),
+            ('Unique words', f'{vocab_size:,}'),
+            ('Forwarded',    f'{n_fwd:,}'),
+            ('Replies',      f'{n_replies:,}'),
+        ]
+        generate_pdf(
+            path=pdf_path,
+            chat_name=chat_name,
+            first_date=first_date,
+            last_date=last_date,
+            overview_cards=overview_cards,
+            word_freq_smart=word_freq_smart,
+            hm_data=hm_data,
+            person_stats=person_stats,
+            emoji_freq=emoji_freq,
+            reaction_freq=reaction_freq,
+            link_freq=link_freq,
+            b64_wc=b64_wc_smart,
+            b64_timeline=b64_timeline,
+            b64_sent=b64_sent,
+        )
+        print(f'  Saved → {pdf_path}')
 
     return f"""<!DOCTYPE html>
 <html lang="ru">
@@ -705,11 +752,12 @@ def generate(messages: list[Message], chat_name: str, num_words: int = 150) -> s
 {_section('stats', 'sec.stats', stats_table)}
 
 <section>
-  <div class="two-col">
+  <div class="{'three-col' if reaction_freq else 'two-col'}">
     <div>
       <h2 data-key="sec.emoji"></h2>
       {_emoji_html(emoji_freq)}
     </div>
+    {'<div><h2 data-key="sec.reactions"></h2>' + _emoji_html(reaction_freq) + '</div>' if reaction_freq else ''}
     <div>
       <h2 data-key="sec.links"></h2>
       {_links_html(link_freq)}
