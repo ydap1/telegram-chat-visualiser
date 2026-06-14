@@ -1,49 +1,44 @@
 
 # Telegram Chat WordCloud Generator
 
-
 A simple tool to visualise the most used words in a Telegram conversation using a word cloud.
 Currently supports English and Russian.
 
 ## Chat export:
 ![](https://github.com/YungDrizzyAP/telegram-chat-visualiser/blob/main/demo.gif)![](https://github.com/YungDrizzyAP/telegram-chat-visualiser/blob/main/example.png)
+
 ## Installation
 
+```bash
+cd telegram-chat-visualiser
+pip3 install -r requirements.txt
+```
 
+## Usage
+
+Export your Telegram chat as JSON (**Settings → Export Telegram data → select the chat → JSON format**), then run:
 
 ```bash
-  cd telegram-chat-visualiser
-  pip3 install -r requirements.txt
-```
-    
-
-
-## Usage/Examples
-To use the script, run it from the command line, passing the input JSON file as a parameter. (Make sure the .json file is in the same directory.)
-```python
 python3 script.py result.json
 ```
-By default, the script will generate a WordCloud with the 150 most common words, with a width of 1280 pixels and a height of 720 pixels. The WordCloud will be saved as a PNG file named 'my_wordcloud.png' in the same directory as the input file.
 
-You can customize the output by using the following optional parameters:
+By default this produces a `wordcloud.png` with the 150 most common words at 1280×720.
 
--n or --num_words: The number of most common words to display in the WordCloud (default is 150)
+### Options
 
--w or --width: The width of the WordCloud (default is 1280)
+| Flag | Long form | Default | Description |
+|------|-----------|---------|-------------|
+| `-n` | `--num-words` | `150` | Number of words to display |
+| `-W` | `--width` | `1280` | Image width in pixels |
+| `-H` | `--height` | `720` | Image height in pixels |
+| `-o` | `--output` | `wordcloud.png` | Output PNG path |
 
--h or --height: The height of the WordCloud (default is 720)
+### Example
 
--o or --output_file: The output file name for the WordCloud PNG (default is 'my_wordcloud.png')
-
-## Example
-```python
-python3 script.py result.json -n 200 -w 1920 -h 1080 -o my_chat_wordcloud.png
-
+```bash
+python3 script.py result.json -n 200 -W 1920 -H 1080 -o chat.png
 ```
 
 ## Contributions are welcome.
 
 YDAP 2022.
-
-
-

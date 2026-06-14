@@ -1,76 +1,94 @@
 import argparse
 import json
 import re
+import sys
+
 import nltk
 from nltk.corpus import stopwords
 from wordcloud import WordCloud
-import matplotlib.pyplot as plt
 
-# download required NLTK data
-nltk.download('punkt')
-nltk.download('stopwords')
 
-# parse command line arguments
-parser = argparse.ArgumentParser(description='Generate a WordCloud from Telegram chat data JSON file')
-parser.add_argument('input_file', type=str, help='the input JSON file')
-parser.add_argument('--num_words', type=int, default=150, help='number of most common words to display in the WordCloud')
-parser.add_argument('--width', type=int, default=1280, help='width of the WordCloud')
-parser.add_argument('--height', type=int, default=720, help='height of the WordCloud')
-parser.add_argument('--output_file', type=str, default='my_wordcloud.png', help='output file name for the WordCloud PNG')
-args = parser.parse_args()
+def ensure_nltk_data():
+    for resource, package in [
+        ('tokenizers/punkt_tab', 'punkt_tab'),
+        ('tokenizers/punkt', 'punkt'),
+        ('corpora/stopwords', 'stopwords'),
+    ]:
+        try:
+            nltk.data.find(resource)
+        except LookupError:
+            nltk.download(package, quiet=True)
 
-# read the JSON data and extract the messages
-with open(args.input_file, 'r', encoding='utf-8') as f:
-    data = json.load(f)
 
-messages = []
-for message in data['messages']:
-    if 'text' in message:
-        text = message['text']
-        if isinstance(text, str):
-            text = re.sub(r'[^\w\s]+|[\d]+|<[^>]+>', '', text)
-            messages.append(text.strip()) # Strip leading/trailing whitespace
+def extract_text(field):
+    if isinstance(field, str):
+        return field
+    if isinstance(field, list):
+        parts = []
+        for part in field:
+            if isinstance(part, str):
+                parts.append(part)
+            elif isinstance(part, dict):
+                parts.append(part.get('text', ''))
+        return ''.join(parts)
+    return ''
 
-# Remove the 'from' field from each message
-for i in range(len(messages)):
-    if ': ' in messages[i]:
-        message_parts = messages[i].split(': ', 1)
-        if len(message_parts) > 1:
-            messages[i] = message_parts[1]
-        else:
-            messages[i] = message_parts[0]
 
-# convert the list of messages to a single string
-text = ' '.join(messages)
+def clean(text):
+    text = re.sub(r'<[^>]+>', '', text)
+    text = re.sub(r'[^\w\s]', '', text)
+    return text.strip()
 
-# read the stopword lists for both English and Russian languages
-en_stopwords = set(stopwords.words('english'))
-ru_stopwords = set(stopwords.words('russian'))
 
-# tokenize the text into words
-words = nltk.word_tokenize(text)
+def parse_args():
+    p = argparse.ArgumentParser(description='Generate a word cloud from a Telegram chat export JSON file')
+    p.add_argument('input_file', help='path to the Telegram JSON export')
+    p.add_argument('-n', '--num-words', type=int, default=150, help='number of words to display (default: 150)')
+    p.add_argument('-W', '--width', type=int, default=1280, help='image width in pixels (default: 1280)')
+    p.add_argument('-H', '--height', type=int, default=720, help='image height in pixels (default: 720)')
+    p.add_argument('-o', '--output', default='wordcloud.png', help='output PNG path (default: wordcloud.png)')
+    return p.parse_args()
 
-# remove stopwords from both English and Russian languages
-filtered_words = [word.lower() for word in words if word.lower() not in en_stopwords and word.lower() not in ru_stopwords]
 
-# calculate word frequency distribution
-fdist = nltk.FreqDist(filtered_words)
+def main():
+    ensure_nltk_data()
+    args = parse_args()
 
-# get the most common words
-most_common_words = fdist.most_common(args.num_words)
+    try:
+        with open(args.input_file, encoding='utf-8') as f:
+            data = json.load(f)
+    except FileNotFoundError:
+        sys.exit(f'error: file not found: {args.input_file}')
+    except json.JSONDecodeError as e:
+        sys.exit(f'error: invalid JSON: {e}')
 
-# create a WordCloud object
-wordcloud = WordCloud(width=args.width, height=args.height, background_color='black')
+    texts = []
+    for msg in data.get('messages', []):
+        if msg.get('type') != 'message':
+            continue
+        cleaned = clean(extract_text(msg.get('text', '')))
+        if cleaned:
+            texts.append(cleaned)
 
-# generate the word cloud using the most common words
-wordcloud.generate_from_frequencies(dict(most_common_words))
+    if not texts:
+        sys.exit('error: no text messages found in the export file')
 
-# plot the word cloud using Matplotlib
-plt.figure(figsize=(8, 8), facecolor=None)
-plt.imshow(wordcloud)
-plt.axis('off')
-plt.tight_layout(pad=0)
+    combined = ' '.join(texts)
+    stopwords_set = set(stopwords.words('english')) | set(stopwords.words('russian'))
+    words = nltk.word_tokenize(combined)
+    filtered = [w.lower() for w in words if w.isalpha() and w.lower() not in stopwords_set]
 
-# save the plot as a PNG file with the provided name
-output_file = args.output_file if args.output_file else 'my_wordcloud.png'
-wordcloud.to_file(output_file)
+    if not filtered:
+        sys.exit('error: no words remain after filtering stopwords')
+
+    fdist = nltk.FreqDist(filtered)
+    frequencies = dict(fdist.most_common(args.num_words))
+
+    wc = WordCloud(width=args.width, height=args.height, background_color='black')
+    wc.generate_from_frequencies(frequencies)
+    wc.to_file(args.output)
+    print(f'saved to {args.output}')
+
+
+if __name__ == '__main__':
+    main()
