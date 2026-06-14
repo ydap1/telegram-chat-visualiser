@@ -72,11 +72,14 @@ def _load_json(path: str) -> tuple[list[Message], str]:
 
 def load(path: str) -> tuple[list[Message], str]:
     """Load a Telegram export. Accepts:
-    - a directory containing messages*.html files (HTML export)
+    - a directory (HTML export with messages*.html, or JSON export with result.json)
     - a single .html file
-    - a .json file (JSON export)
+    - a .json file
     """
     if os.path.isdir(path):
+        json_path = os.path.join(path, 'result.json')
+        if os.path.isfile(json_path):
+            return _load_json(json_path)
         from tcv.html_parser import load_directory
         return load_directory(path)
 
